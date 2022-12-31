@@ -38,7 +38,7 @@ class AGGridDataBuilder {
 		$this->applySorting($request);
 		$this->applyLimit($request);
 
-		\Log::debug($this->sqlBuilder->toSql());
+		\Log::debug($this->sqlBuilder->toSql() . ' [' . join(', ', $this->sqlBuilder->getBindings()) . ']');
 		$this->fetch();
 		$this->rowCount = $this->initRowCount($request);
 		$this->resultsForPage = $this->cutResultsToPageSize($request);
@@ -77,15 +77,12 @@ class AGGridDataBuilder {
 		$rowGroupCols = $request->input('rowGroupCols');
 		$groupKeys = $request->input('groupKeys');
 
-		if (empty($groupKeys) || empty($rowGroupCols) || count($groupKeys) >= count($rowGroupCols)) {
-			if (count($rowGroupCols) > count($groupKeys)) {
-				$this->sqlBuilder->groupBy($rowGroupCols[sizeof($groupKeys)]['field']);
-			}
+		if (count($groupKeys) >= count($rowGroupCols)) {
 			return $this;
 		}
 
 		$colsToGroupBy = [];
-		$rowGroupCol = $rowGroupCols[sizeof($groupKeys) - 1];
+		$rowGroupCol = $rowGroupCols[sizeof($groupKeys)];
 		array_push($colsToGroupBy, $rowGroupCol['field']);
 
 		$this->sqlBuilder->groupBy($colsToGroupBy);
@@ -120,10 +117,9 @@ class AGGridDataBuilder {
 		$groupKeys = $request->input('groupKeys');
 
 		if (sizeof($groupKeys) > 0) {
-			foreach ($groupKeys as $key => $value) {
-				$colName = $rowGroupCols[$key]['field'];
-				$this->sqlBuilder->where($colName, $value);
-			}
+			$groupKey = $groupKeys[sizeof($groupKeys) - 1];
+			$rowGroupCol = $rowGroupCols[sizeof($groupKeys) - 1];
+			$this->sqlBuilder->where($rowGroupCol['field'], $groupKey);
 		}
 
 		if (empty($filters)) {
