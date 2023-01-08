@@ -37,16 +37,10 @@
 const gridOptions = {
     rowModelType: "serverSide",
     columnDefs: [
-        { field: "athlete", filter: "agTextColumnFilter" },
-        { field: "country", rowGroup: true, hide: true },
-        { field: "sport", rowGroup: true, hide: true },
-        {
-            field: "year",
-            filter: "number",
-        },
-        { field: "gold", aggFunc: "sum" },
-        { field: "silver", aggFunc: "sum" },
-        { field: "bronze", aggFunc: "sum" },
+        { field: "messages.id", filter: "agNumberColumnFilter" },
+        { field: "messages.message", filter: "agTextColumnFilter" },
+        { field: "posts.title", headerName: "Post", filter: "agTextColumnFilter" },
+				{ field: "users.name", headerName: "User", filter: "agTextColumnFilter" },
     ],
 
     defaultColDef: {
@@ -71,7 +65,7 @@ new agGrid.Grid(gridDiv, gridOptions);
 
 const datasource = {
     getRows(params) {
-        fetch("/api/olympicWinners/", {
+        fetch("/api/messages/", {
             method: "post",
             body: JSON.stringify(params.request),
             headers: { "Content-Type": "application/json; charset=utf-8" },

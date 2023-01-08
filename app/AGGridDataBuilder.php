@@ -27,8 +27,8 @@ class AGGridDataBuilder {
 	private function __construct(private Builder $sqlBuilder) {
 	}
 
-	public static function create(string $modelClass) : self {
-		return new self($modelClass::query());
+	public static function create(Builder $sqlBuilder) : self {
+		return new self($sqlBuilder);
 	}
 
 	public function build(Request $request) : self {
@@ -42,12 +42,16 @@ class AGGridDataBuilder {
 		$this->fetch();
 		$this->rowCount = $this->initRowCount($request);
 		$this->resultsForPage = $this->cutResultsToPageSize($request);
-
 		return $this;
 	}
 
 	protected function fetch() : self {
 		$this->results = $this->sqlBuilder->get();
+		return $this;
+	}
+
+	public function map(callable $callback) : self {
+		$this->resultsForPage = $this->resultsForPage->map($callback);
 		return $this;
 	}
 
@@ -186,18 +190,13 @@ class AGGridDataBuilder {
 
 	private function initRowCount($request) {
 		$results = $this->results;
-		if (is_null($results) || !isset($results) || sizeof($results) == 0) {
+		if (is_null($results) || count($results) == 0) {
 			// or return null
 			return 0;
 		}
 
-		$currentLastRow = $request['startRow'] + sizeof($results);
-
-		if ($currentLastRow <= $request['endRow']) {
-			return $currentLastRow;
-		} else {
-			return -1;
-		}
+		$currentLastRow = $request['startRow'] + count($results);
+		return $currentLastRow <= $request['endRow'] ? $currentLastRow : -1;
 	}
 
 	private function cutResultsToPageSize($request) : Collection {

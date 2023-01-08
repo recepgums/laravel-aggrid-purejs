@@ -32,6 +32,12 @@ class DatabaseSeeder extends Seeder {
 				'total' => $obj->total
 			]);
 		}
+
+		$this->call([
+			UserSeeder::class,
+			PostSeeder::class,
+			MessageSeeder::class,
+		]);
 		// \App\Models\User::factory(10)->create();
 	}
 }
