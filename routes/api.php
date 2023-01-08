@@ -28,26 +28,27 @@ Route::post('olympicWinners', [AthleteController::class, 'getData'])->name('getD
 Route::get('olympicWinners/{field}', [AthleteController::class, 'getSetFilterValues'])->name('getValues');
 
 Route::post('messages', function(Request $request) {
-	$builder = Message::join('posts', 'posts.id', '=', 'messages.post_id')
-			->join('users', 'users.id', '=', 'posts.user_id')
-		->select([
-			'messages.id as messages_id',
-			'messages.message as messages_message',
-			'users.name as users_name',
-			'posts.title as posts_title',
-		]);
-	return AGGridDataBuilder::create($builder)->build($request)->map(function($data) {
-		$grouped = [];
-		foreach ($data->toArray() as $key => $value) {
-			if (str_contains($key, '_')) {
-				$parts = explode('_', $key);
-				$grouped[$parts[0]][$parts[1]] = $value;
-			} else {
-				$grouped[$key] = $value;
-			}
-		}
-		return $grouped;
-	})->asResponse();
+	$builder = Message::leftJoin('posts', 'posts.id', '=', 'messages.post_id')
+			->leftJoin('users', 'users.id', '=', 'messages.user_id');
+	return AGGridDataBuilder::create($builder)
+		->mapColumns([
+			'users.name' => 'users_name',
+			'posts.title' => 'posts_title',
+		])
+		 ->build($request)
+		 ->map(function($data) {
+			 $grouped = [];
+
+		 	 foreach ($data->toArray() as $key => $value) {
+		 		if (str_contains($key, '_')) {
+		 			$parts = explode('_', $key);
+					$grouped[$parts[0]][$parts[1]] = $value;
+		 		} else {
+		 			$grouped[$key] = $value;
+		 		}
+		 	}
+		 	return $grouped;
+		 })->asResponse();
 });
 
 Route::get('messages/{field}', function(Request $request, $field) {

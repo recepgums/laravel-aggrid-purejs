@@ -10,19 +10,25 @@ use Illuminate\Database\Query\Expression;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use function array_key_exists;
+use function array_keys;
+use function array_map;
+use function array_merge;
 use function array_push;
 use function count;
 use function is_null;
 use function join;
 use function sizeof;
+use function str_contains;
 
 /**
  * AgGridDataBuilder for Laravel Eloquent. Made by @xerenahmed
+ * @version 1.0.0
  */
 class AGGridDataBuilder {
 	private int $rowCount;
 	private Collection $resultsForPage;
 	private Collection $results;
+	private array $columnMap = [];
 
 	private function __construct(private Builder $sqlBuilder) {
 	}
@@ -55,23 +61,60 @@ class AGGridDataBuilder {
 		return $this;
 	}
 
+	public function mapColumns(array $columnMap) : self {
+		$this->columnMap = $columnMap;
+		return $this;
+	}
+
+	public function fixColumn(string $column, bool $map = true, bool $replace = false) : string {
+		$defaultTable = $this->sqlBuilder->getModel()->getTable();
+		if (str_contains($column, '.')) {
+			$value = $column;
+		} else {
+			$value = $defaultTable . '.' . $column;
+		}
+
+		if ($map) {
+			$value = $this->mapColumn($value, $replace);
+		}
+
+		return $value;
+	}
+
+	private function mapColumn(string $column, bool $replace = false) : string {
+		if (array_key_exists($column, $this->columnMap)) {
+			if ($replace) {
+				return $this->columnMap[$column];
+			} else {
+				return $column . ' AS ' . $this->columnMap[$column];
+			}
+		}
+		return $column;
+	}
+
 	private function applySelect(Request $request) : self {
 		$rowGroupCols = $request->input('rowGroupCols');
 		$valueCols = $request->input('valueCols');
 		$groupKeys = $request->input('groupKeys');
 
 		if (!(count($rowGroupCols) > count($groupKeys))) {
+			$defaults = [$this->fixColumn('*', false)];
+			$defaults = array_merge($defaults, array_map(fn($column) => $this->fixColumn($column), array_keys($this->columnMap)));
+			$this->sqlBuilder->select($defaults);
 			return $this;
 		}
 
 		$colsToSelect = [];
 
 		$rowGroupCol = $rowGroupCols[sizeof($groupKeys)];
-		array_push($colsToSelect, $rowGroupCol['field']);
+		array_push($colsToSelect, $this->fixColumn($rowGroupCol['field']));
 
 		foreach ($valueCols as $_ => $value) {
-			array_push($colsToSelect, $value['aggFunc'] . '(' . $value['field'] . ') as ' . $value['field']);
+			$field = $this->fixColumn($value['field'], false);
+			array_push($colsToSelect, $value['aggFunc'] . '(' . $field . ') as ' . $field);
 		}
+
+		array_push($colsToSelect, "count(*) as childCount");
 
 		$this->sqlBuilder->select(new Expression(join(',', $colsToSelect)));
 		return $this;
@@ -85,11 +128,8 @@ class AGGridDataBuilder {
 			return $this;
 		}
 
-		$colsToGroupBy = [];
-		$rowGroupCol = $rowGroupCols[sizeof($groupKeys)];
-		array_push($colsToGroupBy, $rowGroupCol['field']);
-
-		$this->sqlBuilder->groupBy($colsToGroupBy);
+		$field = $this->fixColumn($rowGroupCols[count($groupKeys)]['field'], true, true);
+		$this->sqlBuilder->groupBy($field);
 		return $this;
 	}
 
@@ -100,7 +140,7 @@ class AGGridDataBuilder {
 		}
 
 		foreach ($sortModel as $sort) {
-			$this->sqlBuilder->orderBy($sort['colId'], $sort['sort']);
+			$this->sqlBuilder->orderBy($this->fixColumn($sort['colId'], false), $sort['sort']);
 		}
 
 		return $this;
@@ -123,7 +163,7 @@ class AGGridDataBuilder {
 		if (sizeof($groupKeys) > 0) {
 			$groupKey = $groupKeys[sizeof($groupKeys) - 1];
 			$rowGroupCol = $rowGroupCols[sizeof($groupKeys) - 1];
-			$this->sqlBuilder->where($rowGroupCol['field'], $groupKey);
+			$this->sqlBuilder->where($this->fixColumn($rowGroupCol['field'], false), $groupKey);
 		}
 
 		if (empty($filters)) {
@@ -131,6 +171,7 @@ class AGGridDataBuilder {
 		}
 
 		foreach ($filters as $field => $data) {
+			$field = $this->fixColumn($field, false);
 			if (array_key_exists('operator', $data)) {
 				$operator = $data['operator'];
 				$conditionData1 = $data['condition1'];
@@ -203,7 +244,7 @@ class AGGridDataBuilder {
 		$results = $this->results;
 		$pageSize = $request['endRow'] - $request['startRow'];
 		if ($results && (sizeof($results) > $pageSize)) {
-			return $results->slice($request['startRow'], $pageSize);
+			return $results->splice(0, $pageSize);
 		} else {
 			return $results;
 		}

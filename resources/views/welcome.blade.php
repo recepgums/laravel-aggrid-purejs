@@ -37,10 +37,16 @@
 const gridOptions = {
     rowModelType: "serverSide",
     columnDefs: [
-        { field: "messages.id", filter: "agNumberColumnFilter" },
-        { field: "messages.message", filter: "agTextColumnFilter" },
+        { field: "id", filter: "agNumberColumnFilter" },
+        { field: "message", filter: "agTextColumnFilter" },
         { field: "posts.title", headerName: "Post", filter: "agTextColumnFilter" },
-				{ field: "users.name", headerName: "User", filter: "agTextColumnFilter" },
+				{ field: "users.name", headerName: "User", filter: "agTextColumnFilter",
+                searchable: true,
+								resizable: true,
+								enableRowGroup: true,
+							// group
+							 /* rowGroup: true, hide: true */
+ },
     ],
 
     defaultColDef: {
@@ -57,7 +63,22 @@ const gridOptions = {
     animateRows: true,
     pagination: true,
     paginationAutoPageSize: true,
-    enableRangeSelection: true,
+		enableRangeSelection: true,
+		groupIncludeFooter: true,
+		groupIncludeTotalFooter: true,
+		serverSideInfiniteScroll: true,
+		pagination: true,
+		paginationPageSize: 100,
+		paginationAutoPageSize: true,
+		rowModelType: "serverSide",
+		statusBar: {
+				statusPanels: [
+						{statusPanel: 'agTotalAndFilteredRowCountComponent', key: 'totalAndFilter', align: 'left'},
+						{statusPanel: 'agSelectedRowCountComponent', align: 'left'},
+						{statusPanel: 'agAggregationComponent', align: 'right'}
+				]
+		},
+		sideBar: ['columns', 'filters'],
 };
 
 const gridDiv = document.querySelector("#myGrid");
