@@ -10,31 +10,39 @@ use Illuminate\Database\Query\Expression;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use function array_key_exists;
-use function array_keys;
-use function array_map;
-use function array_merge;
 use function array_push;
 use function count;
+use function explode;
 use function is_null;
 use function join;
 use function sizeof;
 use function str_contains;
+use function str_replace;
+use function str_starts_with;
+use function substr;
 
 /**
  * AgGridDataBuilder for Laravel Eloquent. Made by @xerenahmed
- * @version 1.0.0
+ * @version 1.0.1
  */
 class AGGridDataBuilder {
 	private int $rowCount;
 	private Collection $resultsForPage;
 	private Collection $results;
-	private array $columnMap = [];
+	public array $debug = [];
+	public array $defaultSelects = ['*'];
+	public bool $debugging = false;
 
 	private function __construct(private Builder $sqlBuilder) {
 	}
 
 	public static function create(Builder $sqlBuilder) : self {
 		return new self($sqlBuilder);
+	}
+
+	public function defaultSelects(array $selects) : self {
+		$this->defaultSelects = $selects;
+		return $this;
 	}
 
 	public function build(Request $request) : self {
@@ -44,8 +52,25 @@ class AGGridDataBuilder {
 		$this->applySorting($request);
 		$this->applyLimit($request);
 
-		\Log::debug($this->sqlBuilder->toSql() . ' [' . join(', ', $this->sqlBuilder->getBindings()) . ']');
+		$this->debug['sql'] = $this->sqlBuilder->toSql();
+		$this->debug['bindings'] = $this->sqlBuilder->getBindings();
+
 		$this->fetch();
+		$this->results = $this->results->map(function ($item) {
+			$grouped = [];
+			foreach ($item->toArray() as $key => $value) {
+				if (str_starts_with($key, 'eren_')) {
+					$column = substr($key, 5);
+					$columnData = explode('_', $column);
+					$groupKey = $columnData[0];
+					$key = $columnData[1];
+					$grouped[$groupKey][$key] = $value;
+				} else {
+					$grouped[$key] = $value;
+				}
+			}
+			return $grouped;
+		});
 		$this->rowCount = $this->initRowCount($request);
 		$this->resultsForPage = $this->cutResultsToPageSize($request);
 		return $this;
@@ -58,11 +83,6 @@ class AGGridDataBuilder {
 
 	public function map(callable $callback) : self {
 		$this->resultsForPage = $this->resultsForPage->map($callback);
-		return $this;
-	}
-
-	public function mapColumns(array $columnMap) : self {
-		$this->columnMap = $columnMap;
 		return $this;
 	}
 
@@ -82,11 +102,12 @@ class AGGridDataBuilder {
 	}
 
 	private function mapColumn(string $column, bool $replace = false) : string {
-		if (array_key_exists($column, $this->columnMap)) {
+		$as = 'eren_' . str_replace('.', '_', $column);
+		if (str_contains($column, '.') && !str_contains($column, '*')) {
 			if ($replace) {
-				return $this->columnMap[$column];
-			} else {
-				return $column . ' AS ' . $this->columnMap[$column];
+				return $as;
+			} else if (!str_starts_with($column, $this->sqlBuilder->getModel()->getTable() . '.')) {
+				return $column . ' AS ' . $as;
 			}
 		}
 		return $column;
@@ -98,8 +119,7 @@ class AGGridDataBuilder {
 		$groupKeys = $request->input('groupKeys');
 
 		if (!(count($rowGroupCols) > count($groupKeys))) {
-			$defaults = [$this->fixColumn('*', false)];
-			$defaults = array_merge($defaults, array_map(fn($column) => $this->fixColumn($column), array_keys($this->columnMap)));
+			$defaults = array_map(fn($column) => $this->fixColumn($column, true), $this->defaultSelects);
 			$this->sqlBuilder->select($defaults);
 			return $this;
 		}
@@ -250,6 +270,11 @@ class AGGridDataBuilder {
 		}
 	}
 
+	public function debug(bool $value): self{
+		$this->debugging = $value;
+		return $this;
+	}
+
 	public function getResultsForPage() : Collection {
 		return $this->resultsForPage;
 	}
@@ -259,10 +284,14 @@ class AGGridDataBuilder {
 	}
 
 	public function asResponse() : array {
-		return [
+		$response = [
 			'lastRow' => $this->rowCount,
 			'rows' => $this->resultsForPage,
 		];
+		if ($this->debugging) {
+			$response['debug'] = $this->debug;
+		}
+		return $response;
 	}
 
 	public function getResults() : Collection {
